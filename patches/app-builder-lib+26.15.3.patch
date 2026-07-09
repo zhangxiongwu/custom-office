@@ -1,0 +1,28 @@
+diff --git a/node_modules/app-builder-lib/out/util/electronGet.js b/node_modules/app-builder-lib/out/util/electronGet.js
+index a941f9d..c8160d0 100644
+--- a/node_modules/app-builder-lib/out/util/electronGet.js
++++ b/node_modules/app-builder-lib/out/util/electronGet.js
+@@ -184,7 +184,22 @@ async function extractArchive(file, dir) {
+             throw new Error(`Extraction of ${path.basename(file)} produced no files`);
+         }
+         await fs.rm(dir, { recursive: true, force: true });
+-        await fs.rename(tmpDir, dir);
++        // Windows Defender may briefly lock files in tmpDir after extraction,
++        // causing EPERM on rename. Retry with backoff to work around it.
++        for (let retry = 0; ; retry++) {
++            try {
++                await fs.rename(tmpDir, dir);
++                break;
++            }
++            catch (e) {
++                if (e.code === "EPERM" && retry < 10) {
++                    builder_util_1.log.warn({ tmpDir, dir, attempt: retry + 1 }, "rename EPERM, retrying...");
++                    await new Promise(r => setTimeout(r, 1000 * (retry + 1)));
++                    continue;
++                }
++                throw e;
++            }
++        }
+     }
+     finally {
+         await release().catch(err => builder_util_1.log.warn({ err }, "failed to release lockfile"));

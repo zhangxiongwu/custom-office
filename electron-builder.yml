@@ -1,0 +1,19 @@
+appId: com.custom-office.app
+productName: Custom Office
+directories:
+  output: dist
+  buildResources: build
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: "${productName} ${version}.exe"
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+files:
+  - "!node_modules/.cache/**"
+  - "!tests/**"

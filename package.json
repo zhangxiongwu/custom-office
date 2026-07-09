@@ -1,0 +1,21 @@
+{
+  "name": "custom-office",
+  "version": "1.0.0",
+  "description": "Custom Office - Electron Desktop Application",
+  "main": "src/main.js",
+  "author": "your-name",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win --config electron-builder.yml",
+    "build": "node scripts/build.js",
+    "test": "node tests/run.js"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.0"
+  }
+}
