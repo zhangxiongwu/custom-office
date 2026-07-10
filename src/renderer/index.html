@@ -8,5 +8,30 @@
 <body>
   <div id="root"></div>
   <script type="module" src="./main.tsx"></script>
+  <script>
+    // 创建定时器，每0.5秒检查一次iframe是否加载完成
+    const checkTimer = setInterval(() => {
+      // 获取frameEditor框架
+      console.log('000')
+      const frameWin = window.frames['frameEditor'];
+      console.log(' === frameWin == ', frameWin)
+      if (frameWin) {
+        // 创建style标签
+        const style = frameWin.document.createElement('style');
+        // 屏蔽下载为 按钮
+        style.textContent = `
+          #fm-btn-download { display: none !important; }
+          #fm-btn-protect { display: none !important; }
+          #fm-btn-info { display: none !important; }
+          #fm-btn-settings { display: none !important; }
+          #panel-saveas { display: none !important; }
+        `;
+        // 插入到框架head中
+        frameWin.document.head.appendChild(style);
+        // 执行完成后清除定时器
+        clearInterval(checkTimer);
+      }
+    }, 500);
+  </script>
 </body>
 </html>
