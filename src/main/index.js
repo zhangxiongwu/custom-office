@@ -2,6 +2,8 @@ const { app, BrowserWindow, ipcMain, protocol } = require("electron");
 const { join } = require("path");
 const fs = require("fs");
 const path = require("path");
+const http = require("http");
+const https = require("https");
 
 // 必须在 app.ready 之前注册，使 file:// 协议在 iframe、worker 等所有上下文中可用
 protocol.registerSchemesAsPrivileged([
@@ -46,11 +48,15 @@ if (!gotTheLock) {
 }
 
 function getProtocolUrlFromArgs(args) {
+  console.log("[Main] getProtocolUrlFromArgs, CUSTOM_PROTOCOL:", CUSTOM_PROTOCOL);
   for (const arg of args) {
-    if (arg && arg.startsWith(`${CUSTOM_PROTOCOL}://`)) {
+    console.log("[Main] checking arg:", arg);
+    if (arg && arg.toLowerCase().startsWith(`${CUSTOM_PROTOCOL.toLowerCase()}://`)) {
+      console.log("[Main] matched protocol URL:", arg);
       return arg;
     }
   }
+  console.log("[Main] no protocol URL found in args");
   return null;
 }
 
@@ -104,9 +110,13 @@ function createWindow() {
 }
 
 function sendProtocolUrlToRenderer(url) {
+  console.log("[Main] sendProtocolUrlToRenderer called, url:", url);
   if (mainWindow && mainWindow.webContents) {
     const parsed = parseProtocolUrl(url);
+    console.log("[Main] parsed protocol data:", JSON.stringify(parsed));
     mainWindow.webContents.send("protocol-url", parsed);
+  } else {
+    console.log("[Main] no window to send to, mainWindow:", !!mainWindow);
   }
 }
 
@@ -145,6 +155,82 @@ ipcMain.handle("read-local-file", async (_event, filePath) => {
   } catch (err) {
     return { success: false, error: err.message };
   }
+});
+
+ipcMain.on("start-download", (_event, { url, fileName }) => {
+  console.log("[Main] start-download received, url:", url, "fileName:", fileName);
+
+  const appPath = app.getAppPath();
+  const projectRoot = appPath.endsWith(".asar") ? path.dirname(appPath) : appPath;
+  const tmpDir = join(projectRoot, "tmp");
+  if (!fs.existsSync(tmpDir)) {
+    fs.mkdirSync(tmpDir, { recursive: true });
+    console.log("[Main] created tmp dir:", tmpDir);
+  }
+  const destPath = join(tmpDir, fileName);
+
+  const sendProgress = (received, total) => {
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send("download-progress", { received, total });
+    }
+  };
+
+  const sendComplete = (result) => {
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send("download-complete", result);
+    }
+  };
+
+  const doDownload = (downloadUrl) => {
+    const proto = downloadUrl.startsWith("https") ? https : http;
+    console.log("[Main] starting HTTP GET:", downloadUrl);
+
+    const req = proto.get(downloadUrl, (response) => {
+      console.log("[Main] response status:", response.statusCode, "headers:", JSON.stringify(response.headers));
+
+      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        const redirectUrl = response.headers.location;
+        console.log("[Main] following redirect to:", redirectUrl);
+        doDownload(redirectUrl);
+        return;
+      }
+
+      const total = parseInt(response.headers["content-length"] || "0", 10);
+      console.log("[Main] content-length:", total);
+      let received = 0;
+      const chunks = [];
+
+      response.on("data", (chunk) => {
+        chunks.push(chunk);
+        received += chunk.length;
+        sendProgress(received, total);
+      });
+
+      response.on("end", () => {
+        const buffer = Buffer.concat(chunks);
+        fs.writeFileSync(destPath, buffer);
+        console.log("[Main] download complete, size:", buffer.length, "saved to:", destPath);
+        sendComplete({
+          success: true,
+          filePath: destPath,
+          data: buffer.toString("base64"),
+          size: buffer.length,
+        });
+      });
+
+      response.on("error", (err) => {
+        console.error("[Main] download response error:", err);
+        sendComplete({ success: false, error: err.message });
+      });
+    });
+
+    req.on("error", (err) => {
+      console.error("[Main] download request error:", err);
+      sendComplete({ success: false, error: err.message });
+    });
+  };
+
+  doDownload(url);
 });
 
 app.on("window-all-closed", () => {

@@ -1,6 +1,7 @@
 node_modules/
 dist/
 out/
+tmp/
 *.exe
 .DS_Store
 Thumbs.db

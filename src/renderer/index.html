@@ -12,9 +12,7 @@
     // 创建定时器，每0.5秒检查一次iframe是否加载完成
     const checkTimer = setInterval(() => {
       // 获取frameEditor框架
-      console.log('000')
       const frameWin = window.frames['frameEditor'];
-      console.log(' === frameWin == ', frameWin)
       if (frameWin) {
         // 创建style标签
         const style = frameWin.document.createElement('style');
