@@ -35,4 +35,10 @@ contextBridge.exposeInMainWorld("fileSystem", {
     ipcRenderer.on("download-complete", listener);
     return () => ipcRenderer.removeListener("download-complete", listener);
   },
+  copyFile: (srcPath, destFileName) =>
+    ipcRenderer.invoke("copy-file", { srcPath, destFileName }),
+  startHttpServer: (filePath) =>
+    ipcRenderer.invoke("start-http-server", filePath),
+  stopHttpServer: () =>
+    ipcRenderer.invoke("stop-http-server"),
 });

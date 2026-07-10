@@ -52,6 +52,7 @@ function App() {
     received: number;
     total: number;
   } | null>(null);
+  const httpPortRef = useRef<number>(0);
   const hasOpened = useRef(false);
   const managerRef = useRef<OnlyOfficeManager | null>(null);
   const isDev = !window.location.href.startsWith("file://");
@@ -105,6 +106,11 @@ function App() {
     managerRef.current = manager;
     manager.onLoadingChange((data) => {
       setLoading(data.loading);
+      // 加载完成后关闭 HTTP 服务
+      if (!data.loading && httpPortRef.current) {
+        window.fileSystem?.stopHttpServer?.();
+        httpPortRef.current = 0;
+      }
     });
 
     // 兜底：如果 onLoadingChange 没有触发，延迟关闭 loading
@@ -229,13 +235,34 @@ function App() {
 
         console.log("[App] remoteFileName:", remoteFileName);
 
-        const { mimeType } = getFileTypeFromName(remoteFileName);
-        console.log("[App] mimeType:", mimeType);
-        const file = base64ToFile(result.data, remoteFileName, mimeType);
+        // 启动 HTTP 服务
+        setLoadingText("启动 HTTP 服务...");
+        const httpResult = await window.fileSystem?.startHttpServer?.(result.filePath);
+        if (httpResult?.success) {
+          httpPortRef.current = httpResult.port;
+          console.log("[App] HTTP server started on port:", httpResult.port, "url:", httpResult.url);
+        }
 
-        await registerStaticResource();
-        setLoadingText("下载文件完成");
-        await openFileWithManager(file, remoteFileName);
+        // 用 http URL fetch → 转 File → OnlyOffice 预览
+        const mimeType = getFileTypeFromName(remoteFileName).mimeType;
+        const fetchUrl = httpResult?.success
+          ? `${httpResult.url}?t=${Date.now()}`
+          : null;
+
+        if (fetchUrl) {
+          console.log("[App] fetching file from HTTP:", fetchUrl);
+          // TODO 在这里做判断解密逻辑
+          const resp = await fetch(fetchUrl);
+          const blob = await resp.blob();
+          const file = new File([blob], remoteFileName, { type: mimeType });
+
+          await registerStaticResource();
+          setLoadingText("打开文件预览...");
+          await openFileWithManager(file, remoteFileName);
+          await window.fileSystem?.stopHttpServer?.();
+        } else {
+          setLoading(false);
+        }
       });
 
       // 开始下载

@@ -5,6 +5,78 @@ const path = require("path");
 const http = require("http");
 const https = require("https");
 
+// HTTP 服务相关
+let httpServer = null;
+let httpServerPort = 0;
+
+// 找一个空闲端口（范围 30000-39999，避开常用端口）
+function findFreePort() {
+  return new Promise((resolve) => {
+    const server = require("net").createServer();
+    server.listen(0, "127.0.0.1", () => {
+      const port = server.address().port;
+      server.close(() => resolve(port));
+    });
+    server.on("error", () => resolve(0));
+  });
+}
+
+function stopHttpServer() {
+  if (httpServer) {
+    console.log("[Main] stopping HTTP server on port:", httpServerPort);
+    httpServer.close();
+    httpServer = null;
+    httpServerPort = 0;
+  }
+}
+
+function startHttpServer(filePath) {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer((req, res) => {
+      // 只允许 127.0.0.1 访问
+      const remoteAddress = req.socket.remoteAddress;
+      if (remoteAddress !== "127.0.0.1" && remoteAddress !== "::1") {
+        res.writeHead(403);
+        res.end("Forbidden");
+        return;
+      }
+      try {
+        const stat = fs.statSync(filePath);
+        const ext = path.extname(filePath).toLowerCase();
+        const mimeMap = {
+          ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          ".xls": "application/vnd.ms-excel",
+          ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          ".doc": "application/msword",
+          ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          ".ppt": "application/vnd.ms-powerpoint",
+        };
+        res.writeHead(200, {
+          "Content-Type": mimeMap[ext] || "application/octet-stream",
+          "Content-Length": stat.size,
+          "Access-Control-Allow-Origin": "*",
+        });
+        fs.createReadStream(filePath).pipe(res);
+      } catch (err) {
+        res.writeHead(404);
+        res.end("Not Found");
+      }
+    });
+
+    server.listen(0, "127.0.0.1", () => {
+      const port = server.address().port;
+      httpServer = server;
+      httpServerPort = port;
+      console.log("[Main] HTTP server started on http://127.0.0.1:" + port);
+      resolve(port);
+    });
+
+    server.on("error", (err) => {
+      reject(err);
+    });
+  });
+}
+
 // 必须在 app.ready 之前注册，使 file:// 协议在 iframe、worker 等所有上下文中可用
 protocol.registerSchemesAsPrivileged([
   {
@@ -150,6 +222,34 @@ ipcMain.handle("get-startup-protocol-url", () => {
   return url ? parseProtocolUrl(url) : null;
 });
 
+ipcMain.handle("start-http-server", async (_event, filePath) => {
+  console.log("[Main] start-http-server requested for:", filePath);
+  stopHttpServer();
+  try {
+    const port = await startHttpServer(filePath);
+    return { success: true, port, url: `http://127.0.0.1:${port}` };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("stop-http-server", async () => {
+  stopHttpServer();
+  return { success: true };
+});
+
+ipcMain.handle("copy-file", async (_event, { srcPath, destFileName }) => {
+  try {
+    const srcDir = path.dirname(srcPath);
+    const destPath = path.join(srcDir, destFileName);
+    fs.copyFileSync(srcPath, destPath);
+    console.log("[Main] copied file:", srcPath, "->", destPath);
+    return { success: true, filePath: destPath };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 ipcMain.handle("read-local-file", async (_event, filePath) => {
   try {
     const buffer = fs.readFileSync(filePath);
@@ -236,6 +336,7 @@ ipcMain.on("start-download", (_event, { url, fileName }) => {
 });
 
 app.on("window-all-closed", () => {
+  stopHttpServer();
   if (process.platform !== "darwin") {
     app.quit();
   }

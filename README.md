@@ -45,4 +45,10 @@ build.bat
 测试唤醒协议：
 customOffice://open?json=%7B%22file%22%3A%20%22http%3A%2F%2F192.168.1.9%3A8000%2F%E6%B5%8B%E8%AF%95.xlsx%22%7D
 
-
+流程：
+唤醒协议
+下载http文件到tmp
+tmp建http服务
+打开http服务
+通过http文件链接预览文件
+关闭http服务
