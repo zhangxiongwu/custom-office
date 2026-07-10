@@ -16,6 +16,21 @@ cd src/components/onlyoffice-web-comp
 npm i pnpm -g
 pnpm i
 
+src/components/onlyoffice-web-comp 目录下需要手动修改
+    src/components/onlyoffice-web-comp/const/index.ts   
+        if (/^https?:\/\//i.test(path)) {
+        改为：
+        if (/^(https?|file|custom-office-pkg):\/\//i.test(path)) {
+    types/global.d.ts
+        interface Window {
+        里面追加
+        fileSystem?: {
+            readLocalFile: (filePath: string) => Promise<{
+            success: boolean;
+            data?: string;
+            error?: string;
+            }>;
+        };
 
 npm i
 
