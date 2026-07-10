@@ -12,6 +12,9 @@ F12（部分环境支持）
 在当前工程 src/components (若没有对应路径则自己建对应目录) 目录下执行以下命令获取 onlyoffice-web-comp 组件：
 
 git clone https://github.com/electroluxcode/onlyoffice-web-comp.git
+cd src/components/onlyoffice-web-comp
+npm i pnpm -g
+pnpm i
 
 
 npm i
