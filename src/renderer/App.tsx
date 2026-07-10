@@ -186,12 +186,14 @@ function App() {
       console.log("[App] parsed payload:", JSON.stringify(payload));
 
       const fileUrl: string = payload.file;
+      const fileTypeFromPayload: string = payload.fileType || payload.file_type; // 支持 fileType 或者 file_type
       if (!fileUrl) {
         console.warn("[App] protocol payload missing 'file' field");
         return;
       }
 
       console.log("[App] file URL:", fileUrl);
+      console.log("[App] fileType from payload:", fileTypeFromPayload);
 
       // 重置进度
       setDownloadProgress({ received: 0, total: 0 });
@@ -228,10 +230,27 @@ function App() {
           return;
         }
 
-        const [hostnamePart] = new URL(fileUrl).pathname.split("/").filter(Boolean);
-        const remoteFileName = result.filePath
-          ? decodeURIComponent(result.filePath).split(/[/\\]/).pop() || "download.xlsx"
-          : "download.xlsx";
+        // 优先用协议传的 fileType，再用主进程从响应头获取，最后 fallback
+        let remoteFileName: string;
+        if (fileTypeFromPayload) {
+          // 直接用 payload 里的 fileType 作为完整文件名或后缀
+          if (/\.(xlsx?|docx?|pptx?)$/i.test(fileTypeFromPayload)) {
+            remoteFileName = fileTypeFromPayload;
+          } else {
+            remoteFileName = "download." + fileTypeFromPayload.toLowerCase();
+          }
+        } else {
+          remoteFileName = result.fileName || (
+            result.filePath
+              ? decodeURIComponent(result.filePath).split(/[/\\]/).pop()
+              : null
+          ) || "download.xlsx";
+        }
+        
+        // 最后兜底，确保有 Office 扩展名
+        if (!/\.(xlsx?|docx?|pptx?)$/i.test(remoteFileName)) {
+          remoteFileName = remoteFileName + ".xlsx";
+        }
 
         console.log("[App] remoteFileName:", remoteFileName);
 

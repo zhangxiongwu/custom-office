@@ -297,8 +297,24 @@ ipcMain.on("start-download", (_event, { url, fileName }) => {
         return;
       }
 
+      // 从 Content-Disposition 提取文件名
+      let finalFileName = fileName;
+      const contentDisposition = response.headers["content-disposition"];
+      if (contentDisposition) {
+        const fileNameMatch = contentDisposition.match(/filename\*?=['"]?([^;'"\\]+)['"]?/i);
+        if (fileNameMatch) {
+          finalFileName = decodeURIComponent(fileNameMatch[1].replace(/['"]/g, ""));
+          // 如果文件名还是没有扩展名，默认加 .xlsx
+          if (!/\.(xlsx?|docx?|pptx?)$/i.test(finalFileName)) {
+            finalFileName = finalFileName + ".xlsx";
+          }
+        }
+      } else if (!/\.(xlsx?|docx?|pptx?)$/i.test(fileName)) {
+        finalFileName = fileName + ".xlsx";
+      }
+      const finalDestPath = join(tmpDir, finalFileName);
       const total = parseInt(response.headers["content-length"] || "0", 10);
-      console.log("[Main] content-length:", total);
+      console.log("[Main] content-length:", total, "finalFileName:", finalFileName);
       let received = 0;
       const chunks = [];
 
@@ -310,13 +326,14 @@ ipcMain.on("start-download", (_event, { url, fileName }) => {
 
       response.on("end", () => {
         const buffer = Buffer.concat(chunks);
-        fs.writeFileSync(destPath, buffer);
-        console.log("[Main] download complete, size:", buffer.length, "saved to:", destPath);
+        fs.writeFileSync(finalDestPath, buffer);
+        console.log("[Main] download complete, size:", buffer.length, "saved to:", finalDestPath);
         sendComplete({
           success: true,
-          filePath: destPath,
+          filePath: finalDestPath,
           data: buffer.toString("base64"),
           size: buffer.length,
+          fileName: finalFileName,
         });
       });
 
