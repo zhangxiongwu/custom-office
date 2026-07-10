@@ -3,6 +3,11 @@ productName: Custom Office
 directories:
   output: dist
   buildResources: build
+files:
+  - "out/**/*"
+  - "src/components/onlyoffice-web-comp/public/packages/**"
+  - "!node_modules/.cache/**"
+  - "!tests/**"
 win:
   target:
     - target: nsis
@@ -19,6 +24,3 @@ protocols:
   - name: Custom Office Protocol
     schemes:
       - customOffice
-files:
-  - "!node_modules/.cache/**"
-  - "!tests/**"

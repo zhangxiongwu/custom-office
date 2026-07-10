@@ -24,6 +24,16 @@ if (fs.existsSync(distPath)) {
 try { execSync('taskkill /F /IM "Electron.exe" 2>nul', { stdio: "ignore" }); } catch {}
 try { execSync('taskkill /F /IM "Custom Office.exe" 2>nul', { stdio: "ignore" }); } catch {}
 
+// 先执行 electron-vite build 构建渲染进程
+console.log("[build] Running electron-vite build...\n");
+try {
+  execSync("npx electron-vite build", { stdio: "inherit" });
+  console.log("\n[build] electron-vite build SUCCESS.");
+} catch (e) {
+  console.error(`\n[build] electron-vite build FAILED with error code ${e.status || 1}`);
+  process.exit(e.status || 1);
+}
+
 // 构建 hook 脚本的绝对路径，通过 NODE_OPTIONS 注入子进程
 // 注意：在 Windows 下，execSync 经 cmd.exe 会将反斜杠吃掉的引号内容，所以不引号包裹
 // 路径中无空格即安全
