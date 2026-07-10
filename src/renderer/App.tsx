@@ -165,7 +165,7 @@ function App() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      {/* Toolbar */}
+      {/* Toolbar 
       <div className="toolbar">
         <h2>Custom Office</h2>
 
@@ -206,6 +206,7 @@ function App() {
           <span>{loading ? "加载中..." : fileName}</span>
         </span>
       </div>
+      */}
 
       {/* Editor Container */}
       <div
