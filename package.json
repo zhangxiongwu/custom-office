@@ -9,7 +9,7 @@
     "dev": "electron-vite dev",
     "build:vite": "electron-vite build",
     "preview": "electron-vite preview",
-    "start": "electron-vite build && xcopy /E /I /Y \"src\\components\\onlyoffice-web-comp\\public\\packages\" \"out\\packages\\\" && electron .",
+    "start": "electron-vite build && electron .",
     "build:win": "electron-builder --win --config electron-builder.yml",
     "build": "node scripts/build.js",
     "test": "node tests/run.js"

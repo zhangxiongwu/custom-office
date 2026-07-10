@@ -20,21 +20,18 @@ function App() {
   useEffect(() => {
     const isDev = !window.location.href.startsWith("file://");
     if (isDev) {
-      // 开发模式：publicDir 指向 onlyoffice-web-comp/public/
-      // SDK 在 http://localhost:5173/packages/onlyoffice/9.3.0/...
-      registerOnlyOfficeStaticResource({ cdnOrigin: window.location.origin });
-      console.log("[OnlyOffice] Dev mode, origin:", window.location.origin);
+      // 开发模式：publicDir 指向 public/，packages 在 /packages/
+      // cdnOrigin 拼成 {origin}/onlyoffice/... 但需要 {origin}/packages 才对
+      registerOnlyOfficeStaticResource({ cdnOrigin: window.location.origin + "/packages" });
+      console.log("[OnlyOffice] Dev mode, packages:", window.location.origin + "/packages");
     } else {
-      // 生产模式（file://）：out/renderer/index.html
-      // packages 目录需要在 electron-builder 中被打包并放到正确位置
-      // 默认路径 /packages/onlyoffice/9.3.0/ 会相对于 file:// 协议解析
-      const htmlDir = window.location.href.replace(/\/[^/]*$/, "");
-      // 打包后 packages 放在 out/renderer 同级（即 out 目录下）
-      // 但实际上 electron-builder 打包 .asar 后路径会变
-      // 这里先用相对路径，后续需要调整 electron-builder 配置
-      const packagesPath = htmlDir + "/packages";
-      registerOnlyOfficeStaticResource({ cdnOrigin: packagesPath });
-      console.log("[OnlyOffice] Prod mode, packages:", packagesPath);
+      // 生产模式：packages 目录在 src/components/onlyoffice-web-comp/public/packages/
+      // cdnOrigin 会被拼成 {cdnOrigin}/onlyoffice/{version}/... 所以指向 packages 目录
+      const packagesDir = window.location.href
+        .replace("/out/renderer/index.html", "")
+        + "/src/components/onlyoffice-web-comp/public/packages";
+      registerOnlyOfficeStaticResource({ cdnOrigin: packagesDir });
+      console.log("[OnlyOffice] Prod mode, packages:", packagesDir);
     }
   }, []);
 
