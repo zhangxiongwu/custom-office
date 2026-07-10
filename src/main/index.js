@@ -1,5 +1,20 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, protocol } = require("electron");
 const { join } = require("path");
+const fs = require("fs");
+const path = require("path");
+
+// 必须在 app.ready 之前注册，使 file:// 协议在 iframe、worker 等所有上下文中可用
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "file",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+    },
+  },
+]);
 
 // myModule - 内联（electron-vite externalize 不会打包非 node_modules）
 const myModuleValue = 123;
@@ -121,6 +136,15 @@ ipcMain.handle("get-startup-protocol-url", () => {
   const url = startupProtocolUrl;
   startupProtocolUrl = null;
   return url ? parseProtocolUrl(url) : null;
+});
+
+ipcMain.handle("read-local-file", async (_event, filePath) => {
+  try {
+    const buffer = fs.readFileSync(filePath);
+    return { success: true, data: buffer.toString("base64") };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 });
 
 app.on("window-all-closed", () => {

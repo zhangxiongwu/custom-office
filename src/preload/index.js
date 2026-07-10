@@ -20,3 +20,7 @@ contextBridge.exposeInMainWorld("customProtocol", {
   },
   getStartupProtocolUrl: () => ipcRenderer.invoke("get-startup-protocol-url"),
 });
+
+contextBridge.exposeInMainWorld("fileSystem", {
+  readLocalFile: (filePath) => ipcRenderer.invoke("read-local-file", filePath),
+});

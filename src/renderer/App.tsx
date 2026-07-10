@@ -21,12 +21,10 @@ function App() {
     const isDev = !window.location.href.startsWith("file://");
     if (isDev) {
       // 开发模式：publicDir 指向 public/，packages 在 /packages/
-      // cdnOrigin 拼成 {origin}/onlyoffice/... 但需要 {origin}/packages 才对
       registerOnlyOfficeStaticResource({ cdnOrigin: window.location.origin + "/packages" });
       console.log("[OnlyOffice] Dev mode, packages:", window.location.origin + "/packages");
     } else {
-      // 生产模式：packages 目录在 src/components/onlyoffice-web-comp/public/packages/
-      // cdnOrigin 会被拼成 {cdnOrigin}/onlyoffice/{version}/... 所以指向 packages 目录
+      // 生产模式：使用 file:// 绝对路径，x2t worker 中的 resolveSiteUrl 已支持 file:// 协议
       const packagesDir = window.location.href
         .replace("/out/renderer/index.html", "")
         + "/src/components/onlyoffice-web-comp/public/packages";
@@ -74,9 +72,28 @@ function App() {
     [manager, isReadOnly, isDark]
   );
 
-  // 启动时自动打开空白文档
+  // 启动时自动打开 test.xlsx
   useEffect(() => {
-    createEditor(FILE_TYPE.DOCX, "New_Document.docx");
+    const openTestFile = async () => {
+      try {
+        const filePath = "d:\\work\\sie\\front\\biz\\custom-office\\test.xlsx";
+        const result = await window.fileSystem?.readLocalFile(filePath);
+        if (result?.success && result.data) {
+          const binaryStr = atob(result.data);
+          const bytes = new Uint8Array(binaryStr.length);
+          for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+          }
+          const file = new File([bytes], "test.xlsx", {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          });
+          await createEditor(FILE_TYPE.XLSX, "test.xlsx", file);
+        }
+      } catch (err) {
+        console.error("[App] Failed to open test.xlsx:", err);
+      }
+    };
+    openTestFile();
     // cleanup on unmount
     return () => {
       manager?.destroy();
