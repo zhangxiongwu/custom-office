@@ -204,10 +204,7 @@ function App() {
       const removeProgress = window.fileSystem?.onDownloadProgress?.((progress) => {
         console.log(`[App] download progress: ${progress.received} / ${progress.total}`);
         setDownloadProgress(progress);
-        const pct = progress.total > 0
-          ? Math.round((progress.received / progress.total) * 100)
-          : 0;
-        setLoadingText(`下载文件中 ${pct}% (${formatSize(progress.received)})`);
+        setLoadingText(`下载文件中 (${formatSize(progress.received)})`);
       });
 
       // 监听下载完成
@@ -328,27 +325,8 @@ function App() {
             {downloadProgress ? (
               <div style={{ textAlign: "center" }}>
                 <div style={{ marginBottom: 12 }}>{loadingText}</div>
-                <div style={{
-                  width: 300,
-                  height: 8,
-                  background: "#e0e0e0",
-                  borderRadius: 4,
-                  overflow: "hidden",
-                  margin: "0 auto",
-                }}>
-                  <div style={{
-                    width: downloadProgress.total > 0
-                      ? `${Math.round((downloadProgress.received / downloadProgress.total) * 100)}%`
-                      : "10%",
-                    height: "100%",
-                    background: "#1890ff",
-                    borderRadius: 4,
-                    transition: "width 0.2s",
-                  }} />
-                </div>
-                <div style={{ marginTop: 8, fontSize: 13, color: "#999" }}>
+                <div style={{ fontSize: 13, color: "#999" }}>
                   {formatSize(downloadProgress.received)}
-                  {downloadProgress.total > 0 ? ` / ${formatSize(downloadProgress.total)}` : ""}
                 </div>
               </div>
             ) : (
