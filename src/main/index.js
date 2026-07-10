@@ -126,9 +126,11 @@ app.whenReady().then(() => {
 
   if (process.defaultApp) {
     if (process.argv.length >= 2) {
-      app.setAsDefaultProtocolClient(CUSTOM_PROTOCOL, process.execPath, [
-        join(__dirname, "../..", process.argv[1]),
-      ]);
+      // electron-vite dev 模式下 process.argv[1] 可能是相对路径，需要基于 __dirname 解析
+      const rawArg = process.argv[1];
+      const appPath = path.isAbsolute(rawArg) ? rawArg : path.resolve(__dirname, "../..", rawArg);
+      console.log("[Main] setAsDefaultProtocolClient, rawArg:", rawArg, "appPath:", appPath);
+      app.setAsDefaultProtocolClient(CUSTOM_PROTOCOL, process.execPath, [appPath]);
     }
   } else {
     app.setAsDefaultProtocolClient(CUSTOM_PROTOCOL);
