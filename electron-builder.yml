@@ -14,6 +14,11 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
+  perMachine: false
+protocols:
+  - name: Custom Office Protocol
+    schemes:
+      - customOffice
 files:
   - "!node_modules/.cache/**"
   - "!tests/**"

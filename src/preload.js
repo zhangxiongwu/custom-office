@@ -1,4 +1,4 @@
-const { contextBridge } = require("electron");
+const { contextBridge, ipcRenderer } = require("electron");
 const { value } = require("./myModule");
 
 contextBridge.exposeInMainWorld("versions", {
@@ -9,4 +9,16 @@ contextBridge.exposeInMainWorld("versions", {
 
 contextBridge.exposeInMainWorld("myModule", {
   value,
+});
+
+// 暴露协议 URL 相关的 API
+contextBridge.exposeInMainWorld("customProtocol", {
+  // 监听主进程发来的协议 URL
+  onProtocolUrl: (callback) => {
+    ipcRenderer.on("protocol-url", (_event, data) => {
+      callback(data);
+    });
+  },
+  // 主动获取启动时的协议 URL
+  getStartupProtocolUrl: () => ipcRenderer.invoke("get-startup-protocol-url"),
 });
