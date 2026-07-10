@@ -49,6 +49,13 @@
       margin-top: 32px;
     }
 
+    .module-value {
+      margin-top: 24px;
+      font-size: 24px;
+      font-weight: 700;
+      color: #ffd700;
+    }
+
     .badge {
       display: inline-block;
       padding: 6px 16px;
@@ -68,6 +75,9 @@
       <span class="badge" id="node-version">Node.js: ...</span>
       <span class="badge" id="chrome-version">Chrome: ...</span>
     </div>
+    <div class="module-value">
+      <span id="my-module-value">...</span>
+    </div>
     <div class="info">Powered by Electron + Node.js 24</div>
   </div>
 
@@ -78,6 +88,8 @@
       "Node.js: " + window.versions.node;
     document.getElementById("chrome-version").textContent =
       "Chrome: " + window.versions.chrome;
+    document.getElementById("my-module-value").textContent =
+      "模块值: " + window.myModule.value;
   </script>
 </body>
 </html>
