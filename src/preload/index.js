@@ -41,4 +41,8 @@ contextBridge.exposeInMainWorld("fileSystem", {
     ipcRenderer.invoke("start-http-server", filePath),
   stopHttpServer: () =>
     ipcRenderer.invoke("stop-http-server"),
+  checkFileIsEncrypted: (fileDataBase64, decryptionServiceUrl) =>
+    ipcRenderer.invoke("check-file-is-encrypted", { fileDataBase64, decryptionServiceUrl }),
+  decryptFile: (fileDataBase64, fileSize, decryptionServiceUrl) =>
+    ipcRenderer.invoke("decrypt-file", { fileDataBase64, fileSize, decryptionServiceUrl }),
 });

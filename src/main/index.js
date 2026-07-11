@@ -5,6 +5,102 @@ const path = require("path");
 const http = require("http");
 const https = require("https");
 
+const CHUNK_SIZE = 1024 * 1024; // 1MB chunk size
+
+function createChunkedInputStream(data, chunkSize) {
+  const chunks = [];
+  for (let i = 0; i < data.length; i += chunkSize) {
+    const end = Math.min(data.length, i + chunkSize);
+    chunks.push(data.slice(i, end));
+  }
+  return chunks;
+}
+
+function sendRequestToDecryptionService(methodName, fileData, extraHeaders = {}, decryptionServiceUrl) {
+  return new Promise((resolve, reject) => {
+    const chunks = createChunkedInputStream(fileData, CHUNK_SIZE);
+    const totalSize = fileData.length;
+    let offset = 0;
+    let currentChunkIndex = 0;
+    
+    const options = new URL(decryptionServiceUrl);
+    options.method = 'POST';
+    options.headers = {
+      'method~name': methodName,
+      'Content-Type': 'application/octet-stream',
+      'Transfer-Encoding': 'chunked',
+      ...extraHeaders
+    };
+
+    const req = http.request(options, (res) => {
+      const responseChunks = [];
+      res.on('data', (chunk) => {
+        responseChunks.push(chunk);
+      });
+      res.on('end', () => {
+        const result = {
+          success: res.headers['data~returnflag'] === '0',
+          returnFlag: res.headers['data~returnflag'],
+          data: Buffer.concat(responseChunks)
+        };
+        resolve(result);
+      });
+    });
+
+    req.on('error', (err) => {
+      reject(err);
+    });
+
+    function sendNextChunk() {
+      if (currentChunkIndex < chunks.length) {
+        const chunk = chunks[currentChunkIndex];
+        req.write(chunk);
+        offset += chunk.length;
+        currentChunkIndex++;
+        setImmediate(sendNextChunk);
+      } else {
+        req.end();
+      }
+    }
+    
+    sendNextChunk();
+  });
+}
+
+async function checkFileIsEncrypted(fileData, decryptionServiceUrl) {
+  try {
+    if (!decryptionServiceUrl) {
+      console.error('[Main] checkFileIsEncrypted: decryptionServiceUrl is required');
+      return false;
+    }
+    const result = await sendRequestToDecryptionService('checkFileIsEncryptionRest', fileData, {}, decryptionServiceUrl);
+    return result.returnFlag === '1';
+  } catch (err) {
+    console.error('[Main] checkFileIsEncrypted error:', err);
+    throw err;
+  }
+}
+
+async function decryptFile(fileData, fileSize, decryptionServiceUrl) {
+  try {
+    if (!decryptionServiceUrl) {
+      console.error('[Main] decryptFile: decryptionServiceUrl is required');
+      throw new Error('decryptionServiceUrl is required');
+    }
+    const result = await sendRequestToDecryptionService('fileDecryptionRest', fileData, {
+      'data~fileOffset': '0',
+      'data~counSize': fileSize.toString()
+    }, decryptionServiceUrl);
+    if (!result.success) {
+      throw new Error(`File decryption failed, return flag: ${result.returnFlag}`);
+    }
+    return result.data;
+  } catch (err) {
+    console.error('[Main] decryptFile error:', err);
+    throw err;
+  }
+}
+
 // HTTP 服务相关
 let httpServer = null;
 let httpServerPort = 0;
@@ -350,6 +446,30 @@ ipcMain.on("start-download", (_event, { url, fileName }) => {
   };
 
   doDownload(url);
+});
+
+ipcMain.handle("check-file-is-encrypted", async (_event, { fileDataBase64, decryptionServiceUrl }) => {
+  console.log("[Main] check-file-is-encrypted requested, decryptionServiceUrl:", decryptionServiceUrl);
+  try {
+    const fileData = Buffer.from(fileDataBase64, 'base64');
+    const isEncrypted = await checkFileIsEncrypted(fileData, decryptionServiceUrl);
+    return { success: true, isEncrypted };
+  } catch (err) {
+    console.error("[Main] check-file-is-encrypted error:", err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("decrypt-file", async (_event, { fileDataBase64, fileSize, decryptionServiceUrl }) => {
+  console.log("[Main] decrypt-file requested, fileSize:", fileSize, "decryptionServiceUrl:", decryptionServiceUrl);
+  try {
+    const fileData = Buffer.from(fileDataBase64, 'base64');
+    const decryptedData = await decryptFile(fileData, fileSize, decryptionServiceUrl);
+    return { success: true, data: decryptedData.toString('base64') };
+  } catch (err) {
+    console.error("[Main] decrypt-file error:", err);
+    return { success: false, error: err.message };
+  }
 });
 
 app.on("window-all-closed", () => {

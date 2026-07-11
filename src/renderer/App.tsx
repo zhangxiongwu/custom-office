@@ -187,6 +187,9 @@ function App() {
 
       const fileUrl: string = payload.file;
       const fileTypeFromPayload: string = payload.fileType || payload.file_type; // 支持 fileType 或者 file_type
+      const decryptionServiceUrl: string | undefined = payload.decode; // 获取 decode 字段
+      console.log("[App] decryptionServiceUrl:", decryptionServiceUrl);
+      
       if (!fileUrl) {
         console.warn("[App] protocol payload missing 'file' field");
         return;
@@ -266,16 +269,77 @@ function App() {
           : null;
 
         if (fetchUrl) {
-          console.log("[App] fetching file from HTTP:", fetchUrl);
-          // TODO 在这里做判断解密逻辑
-          const resp = await fetch(fetchUrl);
-          const blob = await resp.blob();
-          const file = new File([blob], remoteFileName, { type: mimeType });
+          let needDecryption = false;
+          let decryptedBase64Data: string | null = null;
 
-          await registerStaticResource();
-          setLoadingText("打开文件预览...");
-          await openFileWithManager(file, remoteFileName);
-          await window.fileSystem?.stopHttpServer?.();
+          if (decryptionServiceUrl) {
+            console.log("[App] checking file encryption status...");
+            // 先获取文件用于检查
+            const checkResp = await fetch(fetchUrl);
+            const checkBlob = await checkResp.blob();
+            const checkArrayBuffer = await checkBlob.arrayBuffer();
+            const base64Data = btoa(
+              new Uint8Array(checkArrayBuffer).reduce(
+                (data, byte) => data + String.fromCharCode(byte),
+                ""
+              )
+            );
+
+            try {
+              const checkResult = await window.fileSystem?.checkFileIsEncrypted?.(base64Data, decryptionServiceUrl);
+              console.log("[App] check file encryption result:", checkResult);
+
+              if (checkResult?.success && checkResult.isEncrypted) {
+                console.log("[App] file is encrypted, starting decryption...");
+                setLoadingText("解密文件中...");
+                
+                const decryptResult = await window.fileSystem?.decryptFile?.(base64Data, result.size, decryptionServiceUrl);
+                if (decryptResult?.success) {
+                  console.log("[App] file decrypted successfully");
+                  decryptedBase64Data = decryptResult.data;
+                  needDecryption = true;
+                } else {
+                  console.error("[App] failed to decrypt file:", decryptResult?.error);
+                  // 解密失败，走回原来的逻辑
+                  needDecryption = false;
+                }
+              } else {
+                console.log("[App] file is not encrypted, using original flow");
+              }
+            } catch (err) {
+              console.error("[App] error checking encryption or decrypting file:", err);
+              // 出错也走回原来的逻辑
+            }
+          }
+
+          if (needDecryption && decryptedBase64Data) {
+            console.log("[App] using decrypted file data");
+            const decodedData = atob(decryptedBase64Data);
+            const decryptedArray = new Uint8Array(decodedData.length);
+            for (let i = 0; i < decodedData.length; i++) {
+              decryptedArray[i] = decodedData.charCodeAt(i);
+            }
+            const finalBlob = new Blob([decryptedArray.buffer], { type: mimeType });
+            const file = new File([finalBlob], remoteFileName, { type: mimeType });
+
+            await registerStaticResource();
+            setLoadingText("打开文件预览...");
+            await openFileWithManager(file, remoteFileName);
+            await window.fileSystem?.stopHttpServer?.();
+          } else {
+            // 走原来的原样逻辑（没有 decode 或文件没加密或出错）
+            console.log("[App] using original flow");
+            console.log("[App] fetching file from HTTP:", fetchUrl);
+            // TODO 在这里做判断解密逻辑
+            const resp = await fetch(fetchUrl);
+            const blob = await resp.blob();
+            const file = new File([blob], remoteFileName, { type: mimeType });
+
+            await registerStaticResource();
+            setLoadingText("打开文件预览...");
+            await openFileWithManager(file, remoteFileName);
+            await window.fileSystem?.stopHttpServer?.();
+          }
         } else {
           setLoading(false);
         }
