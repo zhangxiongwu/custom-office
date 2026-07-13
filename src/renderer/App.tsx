@@ -234,11 +234,7 @@ function App() {
             remoteFileName = "download." + fileTypeFromPayload.toLowerCase();
           }
         } else {
-          remoteFileName = result.fileName || (
-            result.filePath
-              ? decodeURIComponent(result.filePath).split(/[/\\]/).pop()
-              : null
-          ) || "download.xlsx";
+          remoteFileName = result.fileName || "download.xlsx";
         }
         
         // 最后兜底，确保有 Office 扩展名
