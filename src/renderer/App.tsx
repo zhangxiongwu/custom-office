@@ -255,7 +255,7 @@ function App() {
         console.log("[App] remoteFileName:", remoteFileName);
 
         // 启动 HTTP 服务
-        setLoadingText("启动 HTTP 服务...");
+        setLoadingText("启动中...");
         const httpResult = await window.fileSystem?.startHttpServer?.(result.filePath);
         if (httpResult?.success) {
           httpPortRef.current = httpResult.port;
