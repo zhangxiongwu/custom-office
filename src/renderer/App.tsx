@@ -206,11 +206,12 @@ function App() {
 
       // 监听下载完成
       window.fileSystem?.onDownloadComplete?.(async (result) => {
-        console.log("[App] download-complete result:", result);
-        console.log("[App] download-complete result.success:", result.success);
-        console.log("[App] download-complete result.error:", result.error);
-        console.log("[App] download-complete result.filePath:", result.filePath);
-        console.log("[App] download-complete result.data length:", result.data?.length);
+        console.log("[App] ===== download-complete =====");
+        console.log("[App] result.success:", result.success);
+        console.log("[App] result.error:", result.error);
+        console.log("[App] result.fileName:", result.fileName);
+        console.log("[App] result.size:", result.size);
+        console.log("[App] result.data(length):", result.data?.length);
 
         // 清理监听
         if (removeProgress) removeProgress();
@@ -227,7 +228,6 @@ function App() {
         // 优先用协议传的 fileType，再用主进程从响应头获取，最后 fallback
         let remoteFileName: string;
         if (fileTypeFromPayload) {
-          // 直接用 payload 里的 fileType 作为完整文件名或后缀
           if (/\.(xlsx?|docx?|pptx?)$/i.test(fileTypeFromPayload)) {
             remoteFileName = fileTypeFromPayload;
           } else {
@@ -236,8 +236,7 @@ function App() {
         } else {
           remoteFileName = result.fileName || "download.xlsx";
         }
-        
-        // 最后兜底，确保有 Office 扩展名
+
         if (!/\.(xlsx?|docx?|pptx?)$/i.test(remoteFileName)) {
           remoteFileName = remoteFileName + ".xlsx";
         }
@@ -245,40 +244,71 @@ function App() {
         console.log("[App] remoteFileName:", remoteFileName);
 
         const mimeType = getFileTypeFromName(remoteFileName).mimeType;
+        console.log("[App] mimeType:", mimeType);
 
         let fileBase64 = result.data;
 
         if (decryptionServiceUrl) {
+          console.log("[App] decryptionServiceUrl provided:", decryptionServiceUrl);
           console.log("[App] checking file encryption status...");
 
           try {
-            const checkResult = await window.fileSystem?.checkFileIsEncrypted?.(result.data, decryptionServiceUrl);
-            console.log("[App] check file encryption result:", checkResult);
+            console.log("[App] ===== checkFileIsEncrypted REQUEST =====");
+             console.log("[App]   url:", decryptionServiceUrl);
+             console.log("[App]   methodName: checkFileIsEncryptionRest");
+             console.log("[App]   headers: { 'method~name': 'checkFileIsEncryptionRest', 'Content-Type': 'application/octet-stream' }");
+             console.log("[App]   fileData(base64) length:", result.data.length);
+             console.log("[App]   fileSize:", result.size);
+             const checkResult = await window.fileSystem?.checkFileIsEncrypted?.(result.data, decryptionServiceUrl);
+             console.log("[App] ===== checkFileIsEncrypted RESPONSE =====");
+             console.log("[App]   returnFlag:", checkResult?.isEncrypted ? "1(encrypted)" : "0(not encrypted)");
+             console.log("[App]   full result:", JSON.stringify(checkResult));
 
             if (checkResult?.success && checkResult.isEncrypted) {
-              console.log("[App] file is encrypted, starting decryption...");
-              setLoadingText("解密文件中...");
-              
-              const decryptResult = await window.fileSystem?.decryptFile?.(result.data, result.size, decryptionServiceUrl);
+              console.log("[App] file IS encrypted, starting decryption...");
+               setLoadingText("解密文件中...");
+
+               console.log("[App] ===== decryptFile REQUEST =====");
+               console.log("[App]   url:", decryptionServiceUrl);
+               console.log("[App]   methodName: fileDecryptionRest");
+               console.log("[App]   headers: { 'method~name': 'fileDecryptionRest', 'data~fileOffset': '0', 'data~counSize': '" + result.size + "' }");
+               console.log("[App]   fileData(base64) length:", result.data.length);
+               console.log("[App]   fileSize(counSize):", result.size);
+               const decryptResult = await window.fileSystem?.decryptFile?.(result.data, result.size, decryptionServiceUrl);
+               console.log("[App] ===== decryptFile RESPONSE =====");
+               console.log("[App]   success:", decryptResult?.success);
+               console.log("[App]   error:", decryptResult?.error);
+               console.log("[App]   decrypted data(base64) length:", decryptResult?.data?.length);
+
               if (decryptResult?.success) {
-                console.log("[App] file decrypted successfully");
+                console.log("[App] file decrypted successfully, replacing fileBase64");
                 fileBase64 = decryptResult.data;
               } else {
-                console.error("[App] failed to decrypt file:", decryptResult?.error);
+                console.error("[App] decrypt FAILED, will use original encrypted data");
               }
+            } else if (checkResult?.success && !checkResult.isEncrypted) {
+              console.log("[App] file is NOT encrypted, using original flow");
             } else {
-              console.log("[App] file is not encrypted, using original flow");
+              console.log("[App] checkFileIsEncrypted failed, checkResult:", JSON.stringify(checkResult));
             }
           } catch (err) {
-            console.error("[App] error checking encryption or decrypting file:", err);
+            console.error("[App] encryption check/decryption error:", err);
           }
+        } else {
+          console.log("[App] no decryptionServiceUrl, skipping encryption check");
         }
 
+        console.log("[App] creating File from base64, final data length:", fileBase64.length);
         const file = base64ToFile(fileBase64, remoteFileName, mimeType);
+        console.log("[App] File created, name:", remoteFileName, "size:", file.size);
 
         await registerStaticResource();
+        console.log("[App] static resource registered");
+
         setLoadingText("打开文件预览...");
+        console.log("[App] opening file in OnlyOffice manager...");
         await openFileWithManager(file, remoteFileName);
+        console.log("[App] ===== download-complete END =====");
       });
 
       // 开始下载
