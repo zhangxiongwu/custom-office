@@ -52,7 +52,6 @@ function App() {
     received: number;
     total: number;
   } | null>(null);
-  const httpPortRef = useRef<number>(0);
   const hasOpened = useRef(false);
   const managerRef = useRef<OnlyOfficeManager | null>(null);
   const isDev = !window.location.href.startsWith("file://");
@@ -106,11 +105,6 @@ function App() {
     managerRef.current = manager;
     manager.onLoadingChange((data) => {
       setLoading(data.loading);
-      // 加载完成后关闭 HTTP 服务
-      if (!data.loading && httpPortRef.current) {
-        window.fileSystem?.stopHttpServer?.();
-        httpPortRef.current = 0;
-      }
     });
 
     // 兜底：如果 onLoadingChange 没有触发，延迟关闭 loading
@@ -254,95 +248,41 @@ function App() {
 
         console.log("[App] remoteFileName:", remoteFileName);
 
-        // 启动 HTTP 服务
-        setLoadingText("启动中...");
-        const httpResult = await window.fileSystem?.startHttpServer?.(result.filePath);
-        if (httpResult?.success) {
-          httpPortRef.current = httpResult.port;
-          console.log("[App] HTTP server started on port:", httpResult.port, "url:", httpResult.url);
-        }
-
-        // 用 http URL fetch → 转 File → OnlyOffice 预览
         const mimeType = getFileTypeFromName(remoteFileName).mimeType;
-        const fetchUrl = httpResult?.success
-          ? `${httpResult.url}?t=${Date.now()}`
-          : null;
 
-        if (fetchUrl) {
-          let needDecryption = false;
-          let decryptedBase64Data: string | null = null;
+        let fileBase64 = result.data;
 
-          if (decryptionServiceUrl) {
-            console.log("[App] checking file encryption status...");
-            // 先获取文件用于检查
-            const checkResp = await fetch(fetchUrl);
-            const checkBlob = await checkResp.blob();
-            const checkArrayBuffer = await checkBlob.arrayBuffer();
-            const base64Data = btoa(
-              new Uint8Array(checkArrayBuffer).reduce(
-                (data, byte) => data + String.fromCharCode(byte),
-                ""
-              )
-            );
+        if (decryptionServiceUrl) {
+          console.log("[App] checking file encryption status...");
 
-            try {
-              const checkResult = await window.fileSystem?.checkFileIsEncrypted?.(base64Data, decryptionServiceUrl);
-              console.log("[App] check file encryption result:", checkResult);
+          try {
+            const checkResult = await window.fileSystem?.checkFileIsEncrypted?.(result.data, decryptionServiceUrl);
+            console.log("[App] check file encryption result:", checkResult);
 
-              if (checkResult?.success && checkResult.isEncrypted) {
-                console.log("[App] file is encrypted, starting decryption...");
-                setLoadingText("解密文件中...");
-                
-                const decryptResult = await window.fileSystem?.decryptFile?.(base64Data, result.size, decryptionServiceUrl);
-                if (decryptResult?.success) {
-                  console.log("[App] file decrypted successfully");
-                  decryptedBase64Data = decryptResult.data;
-                  needDecryption = true;
-                } else {
-                  console.error("[App] failed to decrypt file:", decryptResult?.error);
-                  // 解密失败，走回原来的逻辑
-                  needDecryption = false;
-                }
+            if (checkResult?.success && checkResult.isEncrypted) {
+              console.log("[App] file is encrypted, starting decryption...");
+              setLoadingText("解密文件中...");
+              
+              const decryptResult = await window.fileSystem?.decryptFile?.(result.data, result.size, decryptionServiceUrl);
+              if (decryptResult?.success) {
+                console.log("[App] file decrypted successfully");
+                fileBase64 = decryptResult.data;
               } else {
-                console.log("[App] file is not encrypted, using original flow");
+                console.error("[App] failed to decrypt file:", decryptResult?.error);
               }
-            } catch (err) {
-              console.error("[App] error checking encryption or decrypting file:", err);
-              // 出错也走回原来的逻辑
+            } else {
+              console.log("[App] file is not encrypted, using original flow");
             }
+          } catch (err) {
+            console.error("[App] error checking encryption or decrypting file:", err);
           }
-
-          if (needDecryption && decryptedBase64Data) {
-            console.log("[App] using decrypted file data");
-            const decodedData = atob(decryptedBase64Data);
-            const decryptedArray = new Uint8Array(decodedData.length);
-            for (let i = 0; i < decodedData.length; i++) {
-              decryptedArray[i] = decodedData.charCodeAt(i);
-            }
-            const finalBlob = new Blob([decryptedArray.buffer], { type: mimeType });
-            const file = new File([finalBlob], remoteFileName, { type: mimeType });
-
-            await registerStaticResource();
-            setLoadingText("打开文件预览...");
-            await openFileWithManager(file, remoteFileName);
-            await window.fileSystem?.stopHttpServer?.();
-          } else {
-            // 走原来的原样逻辑（没有 decode 或文件没加密或出错）
-            console.log("[App] using original flow");
-            console.log("[App] fetching file from HTTP:", fetchUrl);
-            // TODO 在这里做判断解密逻辑
-            const resp = await fetch(fetchUrl);
-            const blob = await resp.blob();
-            const file = new File([blob], remoteFileName, { type: mimeType });
-
-            await registerStaticResource();
-            setLoadingText("打开文件预览...");
-            await openFileWithManager(file, remoteFileName);
-            await window.fileSystem?.stopHttpServer?.();
-          }
-        } else {
-          setLoading(false);
         }
+
+        const file = base64ToFile(fileBase64, remoteFileName, mimeType);
+
+        await registerStaticResource();
+        setLoadingText("打开文件预览...");
+        await openFileWithManager(file, remoteFileName);
       });
 
       // 开始下载
