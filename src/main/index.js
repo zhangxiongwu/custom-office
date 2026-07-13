@@ -32,7 +32,17 @@ function sendRequestToDecryptionService(methodName, fileData, extraHeaders = {},
       ...extraHeaders
     };
 
+    console.log("[Decryption] ===== REQUEST =====");
+    console.log("[Decryption] URL:", decryptionServiceUrl);
+    console.log("[Decryption] methodName:", methodName);
+    console.log("[Decryption] headers:", JSON.stringify({ ...options.headers }));
+    console.log("[Decryption] fileData length:", fileData.length);
+
     const req = http.request(options, (res) => {
+      console.log("[Decryption] ===== RESPONSE =====");
+      console.log("[Decryption] statusCode:", res.statusCode);
+      console.log("[Decryption] headers:", JSON.stringify(res.headers));
+      
       const responseChunks = [];
       res.on('data', (chunk) => {
         responseChunks.push(chunk);
@@ -43,11 +53,15 @@ function sendRequestToDecryptionService(methodName, fileData, extraHeaders = {},
           returnFlag: res.headers['data~returnflag'],
           data: Buffer.concat(responseChunks)
         };
+        console.log("[Decryption] returnFlag:", result.returnFlag);
+        console.log("[Decryption] response data length:", result.data.length);
+        console.log("[Decryption] ===== END =====");
         resolve(result);
       });
     });
 
     req.on('error', (err) => {
+      console.error("[Decryption] request error:", err);
       reject(err);
     });
 
