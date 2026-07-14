@@ -181,6 +181,7 @@ function App() {
 
       const fileUrl: string = payload.file;
       const fileTypeFromPayload: string = payload.fileType || payload.file_type; // 支持 fileType 或者 file_type
+      const fileNameFromPayload: string = payload.fileName || payload.file_name; // 协议中指定的显示文件名
       const decryptionServiceUrl: string | undefined = payload.decode; // 获取 decode 字段
       console.log("[App] decryptionServiceUrl:", decryptionServiceUrl);
       
@@ -225,9 +226,12 @@ function App() {
           return;
         }
 
-        // 优先用协议传的 fileType，再用主进程从响应头获取，最后 fallback
+        // 优先用协议传的 fileName，其次用 fileType，再用主进程从响应头获取，最后 fallback
         let remoteFileName: string;
-        if (fileTypeFromPayload) {
+        if (fileNameFromPayload) {
+          // 协议明确指定了显示文件名，直接使用
+          remoteFileName = fileNameFromPayload;
+        } else if (fileTypeFromPayload) {
           if (/\.(xlsx?|docx?|pptx?)$/i.test(fileTypeFromPayload)) {
             remoteFileName = fileTypeFromPayload;
           } else {
@@ -373,7 +377,7 @@ function App() {
             color: "#999",
             fontSize: 16,
           }}>
-            等待通过浏览器点击预览文件按钮，触发客户端打开文件...
+            请在浏览器点击预览文件按钮，触发客户端打开文件...
           </div>
         )}
       </div>
