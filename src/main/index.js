@@ -279,8 +279,8 @@ function createWindow() {
     mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
 
-  // 默认打开 DevTools 控制台（仅 npm start 生产模式，dev 模式 electron-vite 已自带）
-  if (!process.env.ELECTRON_RENDERER_URL) {
+  // 默认打开 DevTools 控制台（仅 npm start，打包后不弹）
+  if (!app.isPackaged && !process.env.ELECTRON_RENDERER_URL) {
     mainWindow.webContents.openDevTools({ mode: "detach" });
   }
 
