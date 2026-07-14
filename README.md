@@ -32,6 +32,7 @@ src/components/onlyoffice-web-comp 目录下需要手动修改
             }>;
         };
 
+cd 到工程根目录 custom-office
 npm i
 
 npm start
@@ -40,15 +41,16 @@ npm start
 build.bat
 
 
-{"fileType": "xlsx", "file": "http://192.168.1.9:8000/测试.xlsx"}
+{"fileType": "xlsx", "file": "http://localhost:8000/测试.xlsx", "decode": "解密接口url可选"}
+
+json 放浏览器console  encodeURIComponent(JSON.stringify({xx}))  转字符串再encode一下
+最后拼接成url: 在浏览器打开url就能唤起客户端打开excel (客户端会下载excel 解密显示excel)
 
 测试唤醒协议：
-customOffice://open?json=%7B%22file%22%3A%20%22http%3A%2F%2F192.168.1.9%3A8000%2F%E6%B5%8B%E8%AF%95.xlsx%22%7D
+customOffice://open?json=%7B%22file%22%3A%20%22http%3A%2F%2Flocalhost%3A8000%2F%E6%B5%8B%E8%AF%95.xlsx%22%7D
 
 流程：
 唤醒协议
-下载http文件到tmp
-tmp建http服务
-打开http服务
-通过http文件链接预览文件
-关闭http服务
+下载http文件到内存
+内存转文件blob
+放onlyoffice预览出文件
