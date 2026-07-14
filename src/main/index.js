@@ -279,6 +279,11 @@ function createWindow() {
     mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
 
+  // 默认打开 DevTools 控制台（仅 npm start 生产模式，dev 模式 electron-vite 已自带）
+  if (!process.env.ELECTRON_RENDERER_URL) {
+    mainWindow.webContents.openDevTools({ mode: "detach" });
+  }
+
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
@@ -286,7 +291,8 @@ function createWindow() {
   mainWindow.webContents.on("did-finish-load", () => {
     if (startupProtocolUrl) {
       sendProtocolUrlToRenderer(startupProtocolUrl);
-      startupProtocolUrl = null;
+      // 不清除 startupProtocolUrl, 让 get-startup-protocol-url 兜底路径也可用
+      // 渲染进程侧通过 protocolHandled 防重
     }
   });
 }
