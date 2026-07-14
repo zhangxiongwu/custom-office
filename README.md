@@ -38,8 +38,11 @@ npm i
 npm start
 
 构建运行
-build.bat
-
+构建前手动在工程根目录的 package.json 手动增加版本号 "version": "1.0.0",
+再运行
+./build.bat
+构建后在根目录的dist里面会有对应的可安装exe文件 custom-office-1.0.0.exe
+把这个文件自行找文件服务上传使用，例如miniIO
 
 {"fileType": "xlsx", "file": "http://localhost:8000/测试.xlsx", "decode": "解密接口url可选"}
 
