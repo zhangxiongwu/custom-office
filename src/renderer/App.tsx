@@ -206,7 +206,8 @@ function App() {
       });
 
       // 监听下载完成
-      window.fileSystem?.onDownloadComplete?.(async (result) => {
+      let removeComplete: (() => void) | undefined;
+      removeComplete = window.fileSystem?.onDownloadComplete?.(async (result) => {
         console.log("[App] ===== download-complete =====");
         console.log("[App] result.success:", result.success);
         console.log("[App] result.error:", result.error);
@@ -214,8 +215,9 @@ function App() {
         console.log("[App] result.size:", result.size);
         console.log("[App] result.data(length):", result.data?.length);
 
-        // 清理监听
+        // 清理当前下载的监听，防止下次下载再次触发旧回调
         if (removeProgress) removeProgress();
+        if (removeComplete) removeComplete();
 
         setDownloadProgress(null);
         setLoadingText("加载中...");
@@ -333,19 +335,23 @@ function App() {
     console.log("[App] window.customProtocol:", !!window.customProtocol);
     console.log("[App] window.fileSystem:", !!window.fileSystem);
 
+    let startupHandled = false;
+
     window.customProtocol?.onProtocolUrl((data) => {
       console.log("[App] onProtocolUrl callback fired with data:", data);
+      startupHandled = true;
       handleProtocolUrl(data);
     });
 
     // 获取启动时的协议 URL（冷启动时通过命令行传入）
     window.customProtocol?.getStartupProtocolUrl().then((data) => {
       console.log("[App] getStartupProtocolUrl returned:", data);
-      if (data && !data.error) {
+      if (data && !data.error && !startupHandled) {
+        startupHandled = true;
         console.log("[App] handling startup protocol URL");
         handleProtocolUrl(data);
       } else {
-        console.log("[App] no startup protocol URL");
+        console.log("[App] no startup protocol URL or already handled");
       }
     });
   }, []);
