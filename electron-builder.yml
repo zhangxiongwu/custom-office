@@ -1,5 +1,6 @@
 appId: com.custom-office.app
 productName: Custom Office
+icon: build/icon.png
 directories:
   output: dist
   buildResources: build
