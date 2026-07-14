@@ -288,13 +288,8 @@ function createWindow() {
     mainWindow = null;
   });
 
-  mainWindow.webContents.on("did-finish-load", () => {
-    if (startupProtocolUrl) {
-      sendProtocolUrlToRenderer(startupProtocolUrl);
-      // 不清除 startupProtocolUrl, 让 get-startup-protocol-url 兜底路径也可用
-      // 渲染进程侧通过 protocolHandled 防重
-    }
-  });
+  // 冷启动协议 URL 由渲染进程挂载后通过 get-startup-protocol-url 主动获取。
+  // 此处不能提前推送，否则 React 监听器尚未注册时事件会丢失。
 }
 
 function sendProtocolUrlToRenderer(url) {
