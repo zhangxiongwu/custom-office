@@ -23,9 +23,7 @@ function sendRequestToDecryptionService(methodName, fileData, extraHeaders = {},
     let offset = 0;
     let currentChunkIndex = 0;
     
-    const options = new URL(decryptionServiceUrl);
-    options.method = 'POST';
-    options.headers = {
+    const headers = {
       'method~name': methodName,
       'Content-Type': 'application/octet-stream',
       'Transfer-Encoding': 'chunked',
@@ -35,10 +33,19 @@ function sendRequestToDecryptionService(methodName, fileData, extraHeaders = {},
     console.log("[Decryption] ===== REQUEST =====");
     console.log("[Decryption] URL:", decryptionServiceUrl);
     console.log("[Decryption] methodName:", methodName);
-    console.log("[Decryption] headers:", JSON.stringify({ ...options.headers }));
+    console.log("[Decryption] headers:", JSON.stringify(headers));
     console.log("[Decryption] fileData length:", fileData.length);
 
-    const req = http.request(options, (res) => {
+    const req = net.request({
+      method: 'POST',
+      url: decryptionServiceUrl,
+      useSessionCookies: true,
+    });
+    for (const [name, value] of Object.entries(headers)) {
+      req.setHeader(name, value);
+    }
+
+    req.on('response', (res) => {
       console.log("[Decryption] ===== RESPONSE =====");
       console.log("[Decryption] statusCode:", res.statusCode);
       console.log("[Decryption] headers:", JSON.stringify(res.headers));
