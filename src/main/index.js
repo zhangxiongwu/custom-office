@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, protocol } = require("electron");
+const { app, BrowserWindow, ipcMain, protocol, net } = require("electron");
 const { join } = require("path");
 const fs = require("fs");
 const path = require("path");
@@ -386,15 +386,16 @@ ipcMain.on("start-download", (_event, { url, fileName }) => {
   };
 
   const doDownload = (downloadUrl) => {
-    const proto = downloadUrl.startsWith("https") ? https : http;
-    console.log("[Main] starting HTTP GET:", downloadUrl);
+    console.log("[Main] starting Electron net request:", downloadUrl);
+    const req = net.request(downloadUrl);
 
-    const req = proto.get(downloadUrl, (response) => {
+    req.on("response", (response) => {
       console.log("[Main] response status:", response.statusCode, "headers:", JSON.stringify(response.headers));
 
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-        const redirectUrl = response.headers.location;
+        const redirectUrl = new URL(response.headers.location, downloadUrl).toString();
         console.log("[Main] following redirect to:", redirectUrl);
+        response.resume();
         doDownload(redirectUrl);
         return;
       }
@@ -445,6 +446,7 @@ ipcMain.on("start-download", (_event, { url, fileName }) => {
       console.error("[Main] download request error:", err);
       sendComplete({ success: false, error: err.message });
     });
+    req.end();
   };
 
   doDownload(url);
