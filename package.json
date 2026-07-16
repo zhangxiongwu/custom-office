@@ -1,6 +1,6 @@
 {
   "name": "custom-office",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Custom Office - Electron Desktop Application",
   "main": "./out/main/index.js",
   "author": "your-name",
