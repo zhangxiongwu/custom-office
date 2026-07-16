@@ -6,7 +6,6 @@ directories:
   buildResources: build
 files:
   - "out/**/*"
-  - "src/components/onlyoffice-web-comp/public/packages/**"
   - "!node_modules/.cache/**"
   - "!tests/**"
 win:

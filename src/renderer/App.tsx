@@ -69,8 +69,7 @@ function App() {
     mod.registerOnlyOfficeStaticResource({
       cdnOrigin: isDev
         ? window.location.origin + "/packages"
-        : window.location.href.replace("/out/renderer/index.html", "")
-        + "/src/components/onlyoffice-web-comp/public/packages",
+        : window.location.href.replace(/index\.html$/, "packages"),
     });
   };
 
