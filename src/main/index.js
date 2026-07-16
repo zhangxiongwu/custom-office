@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, protocol, net } = require("electron");
+const { app, BrowserWindow, ipcMain, protocol, net, session } = require("electron");
 const { join } = require("path");
 const fs = require("fs");
 const path = require("path");
@@ -16,25 +16,25 @@ function createChunkedInputStream(data, chunkSize) {
   return chunks;
 }
 
-function sendRequestToDecryptionService(methodName, fileData, extraHeaders = {}, decryptionServiceUrl) {
+async function sendRequestToDecryptionService(methodName, fileData, extraHeaders = {}, decryptionServiceUrl) {
+  const headers = {
+    'method~name': methodName,
+    'Content-Type': 'application/octet-stream',
+    'Transfer-Encoding': 'chunked',
+    ...extraHeaders
+  };
+
+  console.log("[Decryption] ===== REQUEST =====");
+  console.log("[Decryption] URL:", decryptionServiceUrl);
+  console.log("[Decryption] proxy:", await session.defaultSession.resolveProxy(decryptionServiceUrl));
+  console.log("[Decryption] methodName:", methodName);
+  console.log("[Decryption] headers:", JSON.stringify(headers));
+  console.log("[Decryption] fileData length:", fileData.length);
+
   return new Promise((resolve, reject) => {
     const chunks = createChunkedInputStream(fileData, CHUNK_SIZE);
-    const totalSize = fileData.length;
     let offset = 0;
     let currentChunkIndex = 0;
-    
-    const headers = {
-      'method~name': methodName,
-      'Content-Type': 'application/octet-stream',
-      'Transfer-Encoding': 'chunked',
-      ...extraHeaders
-    };
-
-    console.log("[Decryption] ===== REQUEST =====");
-    console.log("[Decryption] URL:", decryptionServiceUrl);
-    console.log("[Decryption] methodName:", methodName);
-    console.log("[Decryption] headers:", JSON.stringify(headers));
-    console.log("[Decryption] fileData length:", fileData.length);
 
     const req = net.request({
       method: 'POST',
@@ -310,7 +310,10 @@ function sendProtocolUrlToRenderer(url) {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await session.defaultSession.setProxy({ mode: "system" });
+  console.log("[Main] Electron network proxy mode: system");
+
   console.log("模块值:", myModuleValue);
   showNumber();
 
@@ -392,8 +395,9 @@ ipcMain.on("start-download", (_event, { url, fileName }) => {
     }
   };
 
-  const doDownload = (downloadUrl) => {
+  const doDownload = async (downloadUrl) => {
     console.log("[Main] starting Electron net request:", downloadUrl);
+    console.log("[Main] download proxy:", await session.defaultSession.resolveProxy(downloadUrl));
     const req = net.request(downloadUrl);
 
     req.on("response", (response) => {
