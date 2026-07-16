@@ -325,8 +325,6 @@ app.whenReady().then(async () => {
       console.log("[Main] setAsDefaultProtocolClient, rawArg:", rawArg, "appPath:", appPath);
       app.setAsDefaultProtocolClient(CUSTOM_PROTOCOL, process.execPath, [appPath]);
     }
-  } else {
-    app.setAsDefaultProtocolClient(CUSTOM_PROTOCOL);
   }
 
   startupProtocolUrl = getProtocolUrlFromArgs(process.argv);
