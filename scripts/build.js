@@ -34,6 +34,16 @@ try {
   process.exit(e.status || 1);
 }
 
+// 将当前软件版本固化到渲染进程资源中，随安装包一同发布。
+const packageJson = require(path.join(__dirname, "..", "package.json"));
+const buildInfoPath = path.join(__dirname, "..", "out", "renderer", "build-info.json");
+fs.writeFileSync(
+  buildInfoPath,
+  `${JSON.stringify({ version: packageJson.version }, null, 2)}\n`,
+  "utf8",
+);
+console.log(`[build] Build info generated: ${buildInfoPath}`);
+
 // 构建 hook 脚本的绝对路径，通过 NODE_OPTIONS 注入子进程
 // 注意：在 Windows 下，execSync 经 cmd.exe 会将反斜杠吃掉的引号内容，所以不引号包裹
 // 路径中无空格即安全

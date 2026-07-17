@@ -48,6 +48,7 @@ function App() {
   const [loadingText, setLoadingText] = useState("加载中...");
   const [fileName, setFileName] = useState("test.xlsx");
   const [fileOpened, setFileOpened] = useState(false);
+  const [appVersion, setAppVersion] = useState("");
   const [downloadProgress, setDownloadProgress] = useState<{
     received: number;
     total: number;
@@ -113,6 +114,13 @@ function App() {
 
     console.log(`[App] ${displayName} opened in read-only mode`);
   };
+
+  useEffect(() => {
+    fetch("./build-info.json")
+      .then((response) => response.json())
+      .then((info: { version?: string }) => setAppVersion(info.version || ""))
+      .catch(() => setAppVersion(""));
+  }, []);
 
   // 启动时自动以只读模式打开 test.xlsx
   useEffect(() => {
@@ -359,6 +367,21 @@ function App() {
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <div className="onlyoffice-container editor-container">
         <div id="iframe-office-id" className="editor-iframe" />
+         {appVersion && (
+          <div
+            style={{
+              position: "absolute",
+              right: 5,
+              bottom: 0,
+              zIndex: 10,
+              color: "#999",
+              fontSize: 8,
+              pointerEvents: "none",
+            }}
+          >
+            版本 {appVersion}
+          </div>
+        )}
         {loading && (
           <div className="loading-overlay">
             {downloadProgress ? (
@@ -382,7 +405,7 @@ function App() {
             color: "#999",
             fontSize: 16,
           }}>
-            请在浏览器点击预览文件按钮，触发客户端打开文件...
+            <div>请在浏览器点击预览文件按钮，触发客户端打开文件...</div>
           </div>
         )}
       </div>
