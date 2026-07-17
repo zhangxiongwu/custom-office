@@ -201,7 +201,7 @@ function App() {
       const removeProgress = window.fileSystem?.onDownloadProgress?.((progress) => {
         console.log(`[App] download progress: ${progress.received} / ${progress.total}`);
         setDownloadProgress(progress);
-        setLoadingText(`下载文件中 (${formatSize(progress.received)})`);
+        setLoadingText(`下载文件中 (${fileNameFromPayload})`);
       });
 
       // 监听下载完成
