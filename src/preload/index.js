@@ -23,26 +23,10 @@ contextBridge.exposeInMainWorld("customProtocol", {
 
 contextBridge.exposeInMainWorld("fileSystem", {
   readLocalFile: (filePath) => ipcRenderer.invoke("read-local-file", filePath),
-  startDownload: (url, fileName) =>
-    ipcRenderer.send("start-download", { url, fileName }),
-  onDownloadProgress: (callback) => {
-    const listener = (_event, data) => callback(data);
-    ipcRenderer.on("download-progress", listener);
-    return () => ipcRenderer.removeListener("download-progress", listener);
-  },
-  onDownloadComplete: (callback) => {
-    const listener = (_event, data) => callback(data);
-    ipcRenderer.on("download-complete", listener);
-    return () => ipcRenderer.removeListener("download-complete", listener);
-  },
   copyFile: (srcPath, destFileName) =>
     ipcRenderer.invoke("copy-file", { srcPath, destFileName }),
   startHttpServer: (filePath) =>
     ipcRenderer.invoke("start-http-server", filePath),
   stopHttpServer: () =>
     ipcRenderer.invoke("stop-http-server"),
-  checkFileIsEncrypted: (fileDataBase64, decryptionServiceUrl) =>
-    ipcRenderer.invoke("check-file-is-encrypted", { fileDataBase64, decryptionServiceUrl }),
-  decryptFile: (fileDataBase64, fileSize, decryptionServiceUrl) =>
-    ipcRenderer.invoke("decrypt-file", { fileDataBase64, fileSize, decryptionServiceUrl }),
 });

@@ -10,13 +10,70 @@ async function getOnlyOfficeManager() {
   return OnlyOfficeManagerModule;
 }
 
-function base64ToFile(base64: string, fileName: string, mimeType: string): File {
-  const binaryStr = atob(base64);
-  const bytes = new Uint8Array(binaryStr.length);
-  for (let i = 0; i < binaryStr.length; i++) {
-    bytes[i] = binaryStr.charCodeAt(i);
+function arrayBufferToFile(data: ArrayBuffer, fileName: string, mimeType: string): File {
+  return new File([data], fileName, { type: mimeType });
+}
+
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) {
+    bytes[index] = binary.charCodeAt(index);
   }
-  return new File([bytes], fileName, { type: mimeType });
+  return bytes.buffer;
+}
+
+async function fetchFile(url: string, onProgress: (received: number, total: number) => void) {
+  const response = await fetch(url, { credentials: "include" });
+  if (!response.ok) {
+    throw new Error(`下载文件失败，HTTP ${response.status}`);
+  }
+
+  const total = Number(response.headers.get("content-length")) || 0;
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const data = await response.arrayBuffer();
+    onProgress(data.byteLength, total);
+    return { data, response };
+  }
+
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.byteLength;
+    onProgress(received, total);
+  }
+
+  const data = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    data.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { data: data.buffer, response };
+}
+
+async function requestDecryptionService(
+  methodName: string,
+  fileData: ArrayBuffer,
+  decryptionServiceUrl: string,
+  extraHeaders: Record<string, string> = {},
+) {
+  const response = await fetch(decryptionServiceUrl, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "method~name": methodName,
+      "Content-Type": "application/octet-stream",
+      ...extraHeaders,
+    },
+    body: fileData,
+  });
+  const returnFlag = response.headers.get("data~returnflag");
+  return { success: response.ok && returnFlag === "0", returnFlag, data: await response.arrayBuffer() };
 }
 
 function getFileTypeFromName(fileName: string): { fileType: number; mimeType: string } {
@@ -129,8 +186,8 @@ function App() {
           return;
         }
 
-        const file = base64ToFile(
-          result.data,
+        const file = arrayBufferToFile(
+          base64ToArrayBuffer(result.data),
           "test.xlsx",
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         );
@@ -192,136 +249,58 @@ function App() {
       console.log("[App] file URL:", fileUrl);
       console.log("[App] fileType from payload:", fileTypeFromPayload);
 
-      // 重置进度
       setDownloadProgress({ received: 0, total: 0 });
       setLoadingText("下载文件中...");
       setLoading(true);
 
-      // 监听下载进度
-      const removeProgress = window.fileSystem?.onDownloadProgress?.((progress) => {
-        console.log(`[App] download progress: ${progress.received} / ${progress.total}`);
-        setDownloadProgress(progress);
-        setLoadingText(`下载文件中 (${formatSize(progress.received)})`);
+      const { data: downloadedData } = await fetchFile(fileUrl, (received, total) => {
+        setDownloadProgress({ received, total });
+        setLoadingText(`下载文件中 (${fileNameFromPayload || decodeURIComponent(new URL(fileUrl).pathname).split("/").pop() || "download.xlsx"})`);
       });
+      setDownloadProgress(null);
 
-      // 监听下载完成
-      let removeComplete: (() => void) | undefined;
-      removeComplete = window.fileSystem?.onDownloadComplete?.(async (result) => {
-        console.log("[App] ===== download-complete =====");
-        console.log("[App] result.success:", result.success);
-        console.log("[App] result.error:", result.error);
-        console.log("[App] result.fileName:", result.fileName);
-        console.log("[App] result.size:", result.size);
-        console.log("[App] result.data(length):", result.data?.length);
+      let remoteFileName = fileNameFromPayload;
+      if (!remoteFileName && fileTypeFromPayload) {
+        remoteFileName = /\.(xlsx?|docx?|pptx?)$/i.test(fileTypeFromPayload)
+          ? fileTypeFromPayload
+          : `download.${fileTypeFromPayload.toLowerCase()}`;
+      }
+      if (!remoteFileName) {
+        remoteFileName = decodeURIComponent(new URL(fileUrl).pathname).split("/").pop() || "download.xlsx";
+      }
+      if (!/\.(xlsx?|docx?|pptx?)$/i.test(remoteFileName)) {
+        remoteFileName += ".xlsx";
+      }
 
-        // 清理当前下载的监听，防止下次下载再次触发旧回调
-        if (removeProgress) removeProgress();
-        if (removeComplete) removeComplete();
-
-        setDownloadProgress(null);
-        setLoadingText("加载中...");
-
-        if (!result.success || !result.data) {
-          console.error("[App] download failed:", result.error);
-          setLoading(false);
-          return;
-        }
-
-        // 优先用协议传的 fileName，其次用 fileType，再用主进程从响应头获取，最后 fallback
-        let remoteFileName: string;
-        if (fileNameFromPayload) {
-          // 协议明确指定了显示文件名，直接使用
-          remoteFileName = fileNameFromPayload;
-        } else if (fileTypeFromPayload) {
-          if (/\.(xlsx?|docx?|pptx?)$/i.test(fileTypeFromPayload)) {
-            remoteFileName = fileTypeFromPayload;
-          } else {
-            remoteFileName = "download." + fileTypeFromPayload.toLowerCase();
+      let fileData = downloadedData;
+      if (decryptionServiceUrl) {
+        const checkResult = await requestDecryptionService(
+          "checkFileIsEncryptionRest",
+          fileData,
+          decryptionServiceUrl,
+        );
+        if (checkResult.returnFlag === "1") {
+          setLoadingText("解密文件中...");
+          const decryptResult = await requestDecryptionService(
+            "fileDecryptionRest",
+            fileData,
+            decryptionServiceUrl,
+            { "data~fileOffset": "0", "data~counSize": String(fileData.byteLength) },
+          );
+          if (!decryptResult.success) {
+            throw new Error(`文件解密失败，返回标识：${decryptResult.returnFlag}`);
           }
-        } else {
-          remoteFileName = result.fileName || "download.xlsx";
+          fileData = decryptResult.data;
+        } else if (!checkResult.success) {
+          throw new Error(`文件加密状态检查失败，返回标识：${checkResult.returnFlag}`);
         }
+      }
 
-        if (!/\.(xlsx?|docx?|pptx?)$/i.test(remoteFileName)) {
-          remoteFileName = remoteFileName + ".xlsx";
-        }
-
-        console.log("[App] remoteFileName:", remoteFileName);
-
-        const mimeType = getFileTypeFromName(remoteFileName).mimeType;
-        console.log("[App] mimeType:", mimeType);
-
-        let fileBase64 = result.data;
-
-        if (decryptionServiceUrl) {
-          console.log("[App] decryptionServiceUrl provided:", decryptionServiceUrl);
-          console.log("[App] checking file encryption status...");
-
-          try {
-            console.log("[App] ===== checkFileIsEncrypted REQUEST =====");
-             console.log("[App]   url:", decryptionServiceUrl);
-             console.log("[App]   methodName: checkFileIsEncryptionRest");
-             console.log("[App]   headers: { 'method~name': 'checkFileIsEncryptionRest', 'Content-Type': 'application/octet-stream' }");
-             console.log("[App]   fileData(base64) length:", result.data.length);
-             console.log("[App]   fileSize:", result.size);
-             const checkResult = await window.fileSystem?.checkFileIsEncrypted?.(result.data, decryptionServiceUrl);
-             console.log("[App] ===== checkFileIsEncrypted RESPONSE =====");
-             console.log("[App]   returnFlag:", checkResult?.isEncrypted ? "1(encrypted)" : "0(not encrypted)");
-             console.log("[App]   full result:", JSON.stringify(checkResult));
-
-            if (checkResult?.success && checkResult.isEncrypted) {
-              console.log("[App] file IS encrypted, starting decryption...");
-               setLoadingText("解密文件中...");
-
-               console.log("[App] ===== decryptFile REQUEST =====");
-               console.log("[App]   url:", decryptionServiceUrl);
-               console.log("[App]   methodName: fileDecryptionRest");
-               console.log("[App]   headers: { 'method~name': 'fileDecryptionRest', 'data~fileOffset': '0', 'data~counSize': '" + result.size + "' }");
-               console.log("[App]   fileData(base64) length:", result.data.length);
-               console.log("[App]   fileSize(counSize):", result.size);
-               const decryptResult = await window.fileSystem?.decryptFile?.(result.data, result.size, decryptionServiceUrl);
-               console.log("[App] ===== decryptFile RESPONSE =====");
-               console.log("[App]   success:", decryptResult?.success);
-               console.log("[App]   error:", decryptResult?.error);
-               console.log("[App]   decrypted data(base64) length:", decryptResult?.data?.length);
-
-              if (decryptResult?.success) {
-                console.log("[App] file decrypted successfully, replacing fileBase64");
-                fileBase64 = decryptResult.data;
-              } else {
-                console.error("[App] decrypt FAILED, will use original encrypted data");
-              }
-            } else if (checkResult?.success && !checkResult.isEncrypted) {
-              console.log("[App] file is NOT encrypted, using original flow");
-            } else {
-              console.log("[App] checkFileIsEncrypted failed, checkResult:", JSON.stringify(checkResult));
-            }
-          } catch (err) {
-            console.error("[App] encryption check/decryption error:", err);
-          }
-        } else {
-          console.log("[App] no decryptionServiceUrl, skipping encryption check");
-        }
-
-        console.log("[App] creating File from base64, final data length:", fileBase64.length);
-        const file = base64ToFile(fileBase64, remoteFileName, mimeType);
-        console.log("[App] File created, name:", remoteFileName, "size:", file.size);
-
-        await registerStaticResource();
-        console.log("[App] static resource registered");
-
-        setLoadingText("打开文件预览...");
-        console.log("[App] opening file in OnlyOffice manager...");
-        await openFileWithManager(file, remoteFileName);
-        console.log("[App] ===== download-complete END =====");
-      });
-
-      // 开始下载
-      const urlObj = new URL(fileUrl);
-      const remoteFileName =
-        decodeURIComponent(urlObj.pathname).split("/").pop() || "download.xlsx";
-      console.log("[App] starting download, url:", fileUrl, "fileName:", remoteFileName);
-      window.fileSystem?.startDownload?.(fileUrl, remoteFileName);
+      const mimeType = getFileTypeFromName(remoteFileName).mimeType;
+      const file = arrayBufferToFile(fileData, remoteFileName, mimeType);
+      await registerStaticResource();
+      setLoadingText("打开文件预览...");
+      await openFileWithManager(file, remoteFileName);
     } catch (err) {
       console.error("[App] handleProtocolUrl error:", err);
       setLoading(false);
