@@ -9,8 +9,12 @@
   <div id="root"></div>
   <script type="module" src="./main.tsx"></script>
   <script>
-    // 创建定时器，每0.5秒检查一次iframe是否加载完成
-    const checkTimer = setInterval(() => {
+    // 创建定时器，每0.15秒检查一次iframe是否加载完成
+    if (window._checkTimer) {
+      clearInterval(window._checkTimer);
+      window._checkTimer = null;
+    }
+    window._checkTimer = setInterval(() => {
       // 获取frameEditor框架
       const frameWin = window.frames['frameEditor'];
       if (frameWin && !frameWin.document.getElementById('custom-style-container')) {
@@ -31,7 +35,7 @@
         // 执行完成后清除定时器
         // clearInterval(checkTimer);
       }
-    }, 500);
+    }, 150);
   </script>
 </body>
 </html>
