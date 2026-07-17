@@ -24,7 +24,15 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
 }
 
 async function fetchFile(url: string, onProgress: (received: number, total: number) => void) {
+  console.log("[App] ===== 文件下载请求 =====");
+  console.log("[App] 请求地址:", url);
+  console.log("[App] 请求参数:", { credentials: "include" });
+
   const response = await fetch(url, { credentials: "include" });
+  console.log("[App] ===== 文件下载响应 =====");
+  console.log("[App] 状态:", response.status, response.statusText);
+  console.log("[App] 响应地址:", response.url);
+  console.log("[App] 响应头:", Object.fromEntries(response.headers.entries()));
   if (!response.ok) {
     throw new Error(`下载文件失败，HTTP ${response.status}`);
   }
@@ -62,18 +70,32 @@ async function requestDecryptionService(
   decryptionServiceUrl: string,
   extraHeaders: Record<string, string> = {},
 ) {
+  const requestHeaders = {
+    "method~name": methodName,
+    "Content-Type": "application/octet-stream",
+    ...extraHeaders,
+  };
+  console.log("[App] ===== 解密服务请求 =====");
+  console.log("[App] 请求地址:", decryptionServiceUrl);
+  console.log("[App] 请求方法: POST");
+  console.log("[App] 请求头:", requestHeaders);
+  console.log("[App] 请求体大小:", fileData.byteLength);
+
   const response = await fetch(decryptionServiceUrl, {
     method: "POST",
     credentials: "include",
-    headers: {
-      "method~name": methodName,
-      "Content-Type": "application/octet-stream",
-      ...extraHeaders,
-    },
+    headers: requestHeaders,
     body: fileData,
   });
+  const responseData = await response.arrayBuffer();
   const returnFlag = response.headers.get("data~returnflag");
-  return { success: response.ok && returnFlag === "0", returnFlag, data: await response.arrayBuffer() };
+  console.log("[App] ===== 解密服务响应 =====");
+  console.log("[App] 状态:", response.status, response.statusText);
+  console.log("[App] 响应地址:", response.url);
+  console.log("[App] 响应头:", Object.fromEntries(response.headers.entries()));
+  console.log("[App] 返回标识:", returnFlag);
+  console.log("[App] 响应体大小:", responseData.byteLength);
+  return { success: response.ok && returnFlag === "0", returnFlag, data: responseData };
 }
 
 function getFileTypeFromName(fileName: string): { fileType: number; mimeType: string } {
@@ -274,25 +296,30 @@ function App() {
 
       let fileData = downloadedData;
       if (decryptionServiceUrl) {
-        const checkResult = await requestDecryptionService(
-          "checkFileIsEncryptionRest",
-          fileData,
-          decryptionServiceUrl,
-        );
-        if (checkResult.returnFlag === "1") {
-          setLoadingText("解密文件中...");
-          const decryptResult = await requestDecryptionService(
-            "fileDecryptionRest",
+        try {
+          const checkResult = await requestDecryptionService(
+            "checkFileIsEncryptionRest",
             fileData,
             decryptionServiceUrl,
-            { "data~fileOffset": "0", "data~counSize": String(fileData.byteLength) },
           );
-          if (!decryptResult.success) {
-            throw new Error(`文件解密失败，返回标识：${decryptResult.returnFlag}`);
+          if (checkResult.returnFlag === "1") {
+            setLoadingText("解密文件中...");
+            const decryptResult = await requestDecryptionService(
+              "fileDecryptionRest",
+              fileData,
+              decryptionServiceUrl,
+              { "data~fileOffset": "0", "data~counSize": String(fileData.byteLength) },
+            );
+            if (decryptResult.success) {
+              fileData = decryptResult.data;
+            } else {
+              console.error("[App] 文件解密失败，使用原文件预览，返回标识：", decryptResult.returnFlag);
+            }
+          } else if (!checkResult.success) {
+            console.error("[App] 文件加密状态检查失败，使用原文件预览，返回标识：", checkResult.returnFlag);
           }
-          fileData = decryptResult.data;
-        } else if (!checkResult.success) {
-          throw new Error(`文件加密状态检查失败，返回标识：${checkResult.returnFlag}`);
+        } catch (error) {
+          console.error("[App] 解密服务请求异常，认为文件无需解密并使用原文件预览：", error);
         }
       }
 
