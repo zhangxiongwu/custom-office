@@ -43,12 +43,35 @@ function getFileTypeFromName(fileName: string): { fileType: number; mimeType: st
   };
 }
 
+function getVersionFromDownloadUrl(url: string): string | null {
+  try {
+    const fileName = decodeURIComponent(new URL(url).pathname).split("/").pop() || "";
+    return fileName.match(/\d+(?:\.\d+)+/)?.[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+function isVersionGreater(targetVersion: string, currentVersion: string): boolean {
+  const targetParts = targetVersion.split(".").map(Number);
+  const currentParts = currentVersion.split(".").map(Number);
+  const length = Math.max(targetParts.length, currentParts.length);
+
+  for (let index = 0; index < length; index++) {
+    const difference = (targetParts[index] || 0) - (currentParts[index] || 0);
+    if (difference !== 0) return difference > 0;
+  }
+
+  return false;
+}
+
 function App() {
   const [loading, setLoading] = useState(true);
   const [loadingText, setLoadingText] = useState("加载中...");
   const [fileName, setFileName] = useState("test.xlsx");
   const [fileOpened, setFileOpened] = useState(false);
   const [appVersion, setAppVersion] = useState("");
+  const [updateRequired, setUpdateRequired] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<{
     received: number;
     total: number;
@@ -190,7 +213,35 @@ function App() {
       const fileTypeFromPayload: string = payload.fileType || payload.file_type; // 支持 fileType 或者 file_type
       const fileNameFromPayload: string = payload.fileName || payload.file_name; // 协议中指定的显示文件名
       const decryptionServiceUrl: string | undefined = payload.decode; // 获取 decode 字段
+      const clientDownloadUrl: string | undefined = payload.clientPreview?.winClient;
       console.log("[App] decryptionServiceUrl:", decryptionServiceUrl);
+
+      const requiredVersion = clientDownloadUrl && getVersionFromDownloadUrl(clientDownloadUrl);
+      let currentVersion = appVersion;
+      if (!currentVersion) {
+        try {
+          const response = await fetch("./build-info.json");
+          const info: { version?: string } = await response.json();
+          currentVersion = info.version || "";
+          setAppVersion(currentVersion);
+        } catch {
+          currentVersion = "";
+        }
+      }
+      console.log("[App] version requiredVersion:", requiredVersion);
+      console.log("[App] version currentVersion:", currentVersion);
+
+      if (requiredVersion && currentVersion && isVersionGreater(requiredVersion, currentVersion)) {
+        console.log(`[App] client update required: ${currentVersion} -> ${requiredVersion}`);
+        managerRef.current?.destroy();
+        managerRef.current = null;
+        setFileOpened(false);
+        setUpdateRequired(true);
+        setDownloadProgress(null);
+        setLoading(false);
+        return;
+      }
+      setUpdateRequired(false);
       
       if (!fileUrl) {
         console.warn("[App] protocol payload missing 'file' field");
@@ -399,13 +450,18 @@ function App() {
         {!loading && !fileOpened && (
           <div style={{
             display: "flex",
+            flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
             height: "100%",
             color: "#999",
             fontSize: 16,
           }}>
-            <div>请在浏览器点击预览文件按钮，触发客户端打开文件...</div>
+            {updateRequired ? (
+              <div>请在浏览器网页点击下载客户端按钮，安装最新客户端后再使用。</div>
+            ) : (
+              <div>请在浏览器点击预览文件按钮，触发客户端打开文件...</div>
+            )}
           </div>
         )}
       </div>
