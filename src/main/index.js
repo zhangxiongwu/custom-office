@@ -17,10 +17,10 @@ function createChunkedInputStream(data, chunkSize) {
 }
 
 async function sendRequestToDecryptionService(methodName, fileData, extraHeaders = {}, decryptionServiceUrl) {
+  // Electron net 禁止手动设置 Transfer-Encoding（会报 ERR_INVALID_ARGUMENT），改用 chunkedEncoding
   const headers = {
     'method~name': methodName,
     'Content-Type': 'application/octet-stream',
-    'Transfer-Encoding': 'chunked',
     ...extraHeaders
   };
 
@@ -44,20 +44,27 @@ async function sendRequestToDecryptionService(methodName, fileData, extraHeaders
     for (const [name, value] of Object.entries(headers)) {
       req.setHeader(name, value);
     }
+    req.chunkedEncoding = true;
 
     req.on('response', (res) => {
       console.log("[Decryption] ===== RESPONSE =====");
       console.log("[Decryption] statusCode:", res.statusCode);
       console.log("[Decryption] headers:", JSON.stringify(res.headers));
+
+      const headerValue = (name) => {
+        const value = res.headers[name] ?? res.headers[name.toLowerCase()];
+        return Array.isArray(value) ? value[0] : value;
+      };
       
       const responseChunks = [];
       res.on('data', (chunk) => {
         responseChunks.push(chunk);
       });
       res.on('end', () => {
+        const returnFlag = headerValue('data~returnflag');
         const result = {
-          success: res.headers['data~returnflag'] === '0',
-          returnFlag: res.headers['data~returnflag'],
+          success: returnFlag === '0',
+          returnFlag,
           data: Buffer.concat(responseChunks)
         };
         console.log("[Decryption] returnFlag:", result.returnFlag);
