@@ -12,7 +12,8 @@
     "start": "electron-vite build && electron .",
     "build:win": "electron-builder --win --config electron-builder.yml",
     "build": "node scripts/build.js",
-    "test": "node tests/run.js"
+    "test": "node tests/run.js",
+    "testDecode": "node testDecode/decode.js"
   },
   "engines": {
     "node": ">=24.0.0"
